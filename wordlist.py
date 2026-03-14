@@ -8,7 +8,7 @@ from datetime import datetime
 # --- CẤU HÌNH ---
 MIN_LEN = 8
 MAX_LEN = 64
-RESULT_GENERATE = 1000
+RESULT_GENERATE = 2048
 MIN_COMBO = 1
 MAX_COMBO = 7
 MAX_WORKERS = 8 # Tùy vào số nhân CPU của bạn
@@ -106,28 +106,56 @@ class WordlistManager:
             for w in all_generated: f.write(w + "\n")
 
     def final_clean(self):
-        """Bước quan trọng nhất: Tổng vệ sinh bằng Regex để diệt tận gốc vov0, sex, fuck..."""
-        print("[*] Đang thực hiện chế độ TRUY QUÉT GẮT GAO...")
-        blacklist_raw = self._read_and_clean(self.blacklist_path)
-        # re.escape giúp tránh lỗi nếu blacklist có ký tự lạ
-        blacklist = [re.escape(b.lower()) for b in blacklist_raw if len(b) > 1]
+        """
+        Sắp xếp lại Whitelist, Blacklist theo A-Z 
+        và lọc gắt gao Output bằng Regex.
+        """
+        import re
+        print("\n[*] ĐANG TỔNG VỆ SINH TOÀN BỘ HỆ THỐNG...")
         
-        if not blacklist: return
+        # 1. Đọc Blacklist để dùng làm thước đo chuẩn
+        blacklist_raw = self._read_and_clean(self.blacklist_path)
+        # re.escape để xử lý các ký tự đặc biệt trong từ cấm
+        blacklist_patterns = [re.escape(b.lower()) for b in blacklist_raw if len(b) > 1]
+        
+        # Tạo pattern Regex (IGNORECASE để chấp hết hoa thường)
+        pattern = re.compile("|".join(blacklist_patterns), re.IGNORECASE) if blacklist_patterns else None
 
-        pattern = re.compile("|".join(blacklist), re.IGNORECASE)
-        if self.output_path.exists():
-            with open(self.output_path, 'r', encoding='utf-8') as f:
-                lines = f.readlines()
-            
-            total_before = len(lines)
-            # Dùng Regex để quét sạch toàn bộ list mật khẩu
-            clean_data = sorted(set(l.strip() for l in lines if not pattern.search(l.strip())))
-            
-            with open(self.output_path, 'w', encoding='utf-8') as f:
-                for item in clean_data: f.write(item + "\n")
-            
-            print(f"  [v] Đã tiêu diệt: {total_before - len(clean_data)} từ vi phạm.")
-            print(f"  [v] Wordlist hiện tại: {len(clean_data)} từ sạch.")
+        # Danh sách các file cần dọn dẹp
+        targets = [
+            (self.whitelist_path, "Whitelist"),
+            (self.blacklist_path, "Blacklist"),
+            (self.output_path, "Wordlist Output")
+        ]
+
+        for path, name in targets:
+            if path.exists():
+                with open(path, 'r', encoding='utf-8') as f:
+                    lines = [l.strip() for l in f if l.strip()]
+                
+                total_before = len(lines)
+                
+                # Logic lọc:
+                # - Nếu là file Blacklist: Chỉ xóa trùng và sắp xếp (không tự lọc chính nó).
+                # - Nếu là Whitelist hoặc Output: Xóa trùng + Lọc từ cấm + Sắp xếp.
+                if name == "Blacklist":
+                    final_data = sorted(set(lines))
+                else:
+                    if pattern:
+                        # Giữ lại những dòng KHÔNG chứa từ cấm
+                        final_data = sorted(set(l for l in lines if not pattern.search(l)))
+                    else:
+                        final_data = sorted(set(lines))
+
+                # Ghi đè lại file đã sạch
+                with open(path, 'w', encoding='utf-8') as f:
+                    for item in final_data:
+                        f.write(item + "\n")
+                
+                print(f"  [v] {name:15}: {total_before} -> {len(final_data)} từ (Đã sắp xếp A-Z)")
+
+        print("="*40)
+        print("✨ TẤT CẢ FILE ĐÃ ĐƯỢC TỐI ƯU HÓA!")
 
 if __name__ == "__main__":
     manager = WordlistManager(min_len=MIN_LEN, max_len=MAX_LEN)
