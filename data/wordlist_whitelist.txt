@@ -48,6 +48,10 @@ max
 messi
 microsoft
 min
+mel
+lee
+sin
+yasuo
 mina
 minh
 nga
